@@ -28,6 +28,8 @@ This is a prototype terminal emulator built using SDL3 and SDL3_ttf, designed as
     - Statically linked with SDL3, SDL3_ttf, and FreeType to eliminate DLL dependencies.
     - Built with CMake and MinGW-w64 for Windows, with cross-platform compatibility.
 - Resizable Window: Adjusts rendering to window size, maintaining text layout.
+- Mouse Scroll Support
+
 
 ## Commands
 
@@ -131,7 +133,7 @@ endlocal
 cmd
 ```text
 cd build
-.\sdl2_terminal.exe
+.\sdl_terminal.exe
 ```
 Run Application.
 

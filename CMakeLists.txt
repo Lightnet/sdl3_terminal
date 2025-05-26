@@ -67,4 +67,4 @@ target_include_directories(${APP_NAME} PRIVATE
 
 set_property(TARGET ${APP_NAME} PROPERTY C_STANDARD 11)
 
-configure_file("Kenney Mini.ttf" "${CMAKE_BINARY_DIR}/Kenney Mini.ttf" COPYONLY)
+configure_file("Kenney Pixel.ttf" "${CMAKE_BINARY_DIR}/Kenney Pixel.ttf" COPYONLY)
