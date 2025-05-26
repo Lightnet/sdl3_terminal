@@ -45,6 +45,7 @@ The terminal supports the following case-sensitive commands, entered by typing a
 - help, -help, -h
     - Description: Displays a list of available commands ("Commands: clear, exit, help") on the next line, then moves to a new line for input.
     - History: Not stored in command history.
+- echo text
 
 ### Usage
 
