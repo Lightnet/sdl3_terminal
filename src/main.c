@@ -32,6 +32,7 @@ void cmd_exit(const char *input);
 void cmd_help(const char *input);
 void cmd_echo(const char *input);
 void rewrap_text(void);
+void shift_lines_up(void);
 
 // Command table
 static const Command commands[] = {
@@ -56,6 +57,31 @@ static SDL_Color white = {255, 255, 255, 255};
 static char *command_history[MAX_HISTORY] = {NULL};
 static int history_count = 0;
 static int history_pos = -1;
+
+// Shift lines up to remove the oldest line
+void shift_lines_up(void) {
+    // Free the oldest texture
+    if (textures[0]) {
+        SDL_DestroyTexture(textures[0]);
+        textures[0] = NULL;
+    }
+    // Shift buffers, textures, and editability flags
+    for (int i = 0; i < MAX_LINES - 1; i++) {
+        strcpy(text_buffers[i], text_buffers[i + 1]);
+        textures[i] = textures[i + 1];
+        is_line_editable[i] = is_line_editable[i + 1];
+    }
+    // Clear the last line
+    text_buffers[MAX_LINES - 1][0] = '\0';
+    textures[MAX_LINES - 1] = NULL;
+    is_line_editable[MAX_LINES - 1] = true; // Last line is editable
+    // Keep current_line at MAX_LINES - 1
+    current_line = MAX_LINES - 1;
+    // Adjust scroll_offset to keep current line visible
+    if (scroll_offset > 0 && current_line < scroll_offset + LINES_PER_SCREEN) {
+        scroll_offset--;
+    }
+}
 
 // Re-wrap text based on current max_text_width
 void rewrap_text(void) {
@@ -190,63 +216,67 @@ void cmd_exit(const char *input) {
 }
 
 void cmd_help(const char *input) {
-    if (current_line < MAX_LINES - 1) {
-        // Move to next line for help output
+    // Check if we need to shift lines
+    if (current_line >= MAX_LINES - 1) {
+        shift_lines_up();
+    } else {
         current_line++;
-        // Build help text
-        char help_text[MAX_TEXT_LENGTH] = "Commands: ";
-        int first = 1;
-        for (int i = 0; i < num_commands; i++) {
-            if (commands[i].description) { // Only include commands with descriptions
-                if (!first) {
-                    strcat(help_text, ", ");
-                }
-                strcat(help_text, commands[i].name);
-                first = 0;
+    }
+    // Build help text
+    char help_text[MAX_TEXT_LENGTH] = "Commands: ";
+    int first = 1;
+    for (int i = 0; i < num_commands; i++) {
+        if (commands[i].description) { // Only include commands with descriptions
+            if (!first) {
+                strcat(help_text, ", ");
             }
+            strcat(help_text, commands[i].name);
+            first = 0;
         }
-        // Copy to buffer
-        strcpy(text_buffers[current_line], help_text);
-        is_line_editable[current_line] = false; // Help output is not editable
-        // Update texture
-        if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
-        SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
-        if (!surface) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Help text rendering failed: %s", SDL_GetError());
-            return;
-        }
-        textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
-        SDL_DestroySurface(surface);
-        if (!textures[current_line]) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Help texture creation failed: %s", SDL_GetError());
-            return;
-        }
+    }
+    // Copy to buffer
+    strcpy(text_buffers[current_line], help_text);
+    is_line_editable[current_line] = false; // Help output is not editable
+    // Update texture
+    if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
+    SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+    if (!surface) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Help text rendering failed: %s", SDL_GetError());
+        return;
+    }
+    textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_DestroySurface(surface);
+    if (!textures[current_line]) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Help texture creation failed: %s", SDL_GetError());
+        return;
     }
 }
 
 void cmd_echo(const char *input) {
-    if (current_line < MAX_LINES - 1) {
-        // Move to next line for echo output
+    // Check if we need to shift lines
+    if (current_line >= MAX_LINES - 1) {
+        shift_lines_up();
+    } else {
         current_line++;
-        // Extract text after "echo"
-        const char *text = input + 4; // Skip "echo"
-        while (*text == ' ') text++; // Skip leading spaces
-        // Copy to buffer (empty if no text)
-        strcpy(text_buffers[current_line], text);
-        is_line_editable[current_line] = false; // Echo output is not editable
-        // Update texture
-        if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
-        SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
-        if (!surface) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Echo text rendering failed: %s", SDL_GetError());
-            return;
-        }
-        textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
-        SDL_DestroySurface(surface);
-        if (!textures[current_line]) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Echo texture creation failed: %s", SDL_GetError());
-            return;
-        }
+    }
+    // Extract text after "echo"
+    const char *text = input + 4; // Skip "echo"
+    while (*text == ' ') text++; // Skip leading spaces
+    // Copy to buffer (empty if no text)
+    strcpy(text_buffers[current_line], text);
+    is_line_editable[current_line] = false; // Echo output is not editable
+    // Update texture
+    if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
+    SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+    if (!surface) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Echo text rendering failed: %s", SDL_GetError());
+        return;
+    }
+    textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_DestroySurface(surface);
+    if (!textures[current_line]) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Echo texture creation failed: %s", SDL_GetError());
+        return;
     }
 }
 
@@ -254,16 +284,14 @@ int main(int argc, char *argv[]) {
     printf("SDL3 freetype\n");
 
     // Initialize SDL
-    // https://wiki.libsdl.org/SDL3/SDL_Init
-    if (!SDL_Init(SDL_INIT_VIDEO)) { // SDL 3.x format, default bool
+    if (!SDL_Init(SDL_INIT_VIDEO)) { // SDL 3.x api return bool
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
         return 1;
     }
 
     // Initialize SDL_ttf
     printf("TTF_Init\n");
-    // https://wiki.libsdl.org/SDL3_ttf/TTF_Init
-    if (!TTF_Init()) { // SDL 3.x format, return default bool
+    if (!TTF_Init()) { // SDL 3.x api return bool
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "TTF_Init failed: %s", SDL_GetError());
         SDL_Quit();
         return 1;
@@ -271,8 +299,7 @@ int main(int argc, char *argv[]) {
 
     // Create window and renderer
     printf("SDL_CreateWindowAndRenderer\n");
-    // https://wiki.libsdl.org/SDL3/SDL_CreateWindowAndRenderer
-    //  SDL 3.x format, return default bool
+    // SDL 3.x api return bool
     if (!SDL_CreateWindowAndRenderer("SDL3 Terminal Test", INITIAL_SCREEN_WIDTH, 600, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window/Renderer creation failed: %s", SDL_GetError());
         TTF_Quit();
@@ -393,9 +420,13 @@ int main(int argc, char *argv[]) {
                                 float text_width;
                                 SDL_GetTextureSize(temp_texture, &text_width, NULL);
                                 SDL_DestroyTexture(temp_texture);
-                                if (text_width > max_text_width && current_line < MAX_LINES - 1) {
-                                    // Wrap to next line
-                                    current_line++;
+                                if (text_width > max_text_width) {
+                                    // Check if we need to shift lines
+                                    if (current_line >= MAX_LINES - 1) {
+                                        shift_lines_up();
+                                    } else {
+                                        current_line++;
+                                    }
                                     text_buffers[current_line][0] = '\0';
                                     cursor_pos = 0;
                                     if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
@@ -560,7 +591,7 @@ int main(int argc, char *argv[]) {
                                 textures[current_line] = NULL;
                             }
                         }
-                    } else if (event.key.key == SDLK_RETURN && current_line < MAX_LINES - 1) {
+                    } else if (event.key.key == SDLK_RETURN) {
                         // Check for commands
                         bool is_command = false;
                         bool is_clear = false;
@@ -594,7 +625,11 @@ int main(int argc, char *argv[]) {
                                 command_history[MAX_HISTORY - 1] = strdup(text_buffers[current_line]);
                             }
                             // Move to next line
-                            current_line++;
+                            if (current_line >= MAX_LINES - 1) {
+                                shift_lines_up();
+                            } else {
+                                current_line++;
+                            }
                             text_buffers[current_line][0] = '\0';
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             textures[current_line] = NULL;
@@ -606,7 +641,11 @@ int main(int argc, char *argv[]) {
                             }
                         } else if (is_command && !is_clear && command_index >= 0 && strcmp(commands[command_index].name, "exit") != 0) {
                             // Move to next line for help and echo
-                            current_line++;
+                            if (current_line >= MAX_LINES - 1) {
+                                shift_lines_up();
+                            } else {
+                                current_line++;
+                            }
                             text_buffers[current_line][0] = '\0';
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             textures[current_line] = NULL;
