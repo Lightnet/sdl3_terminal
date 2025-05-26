@@ -9,15 +9,15 @@
 #define MAX_LINES 100 // Increased to allow more lines
 #define LINES_PER_SCREEN 30 // Approx. 600px height / 20px per line
 #define CURSOR_BLINK_MS 500
-#define SCREEN_WIDTH 800 // Window width
+#define INITIAL_SCREEN_WIDTH 800 // Initial window width
 #define TEXT_MARGIN 10 // Left margin
-#define MAX_TEXT_WIDTH (SCREEN_WIDTH - TEXT_MARGIN) // Max width for text
 #define MAX_HISTORY 50 // Max commands in history
 
 /* We will use this renderer to draw into this window every frame. */
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static TTF_Font *font = NULL; // For command functions
+static int max_text_width = INITIAL_SCREEN_WIDTH - TEXT_MARGIN; // Dynamic max width for text
 
 // Command structure
 typedef struct {
@@ -30,6 +30,7 @@ typedef struct {
 void cmd_clear(void);
 void cmd_exit(void);
 void cmd_help(void);
+void rewrap_text(void);
 
 // Command table
 static const Command commands[] = {
@@ -53,6 +54,119 @@ static SDL_Color white = {255, 255, 255, 255};
 static char *command_history[MAX_HISTORY] = {NULL};
 static int history_count = 0;
 static int history_pos = -1;
+
+// Re-wrap text based on current max_text_width
+void rewrap_text(void) {
+    char temp_buffers[MAX_LINES][MAX_TEXT_LENGTH] = {{0}};
+    bool temp_editable[MAX_LINES] = {false};
+    SDL_Texture *temp_textures[MAX_LINES] = {NULL};
+    int new_line_count = 0;
+    int old_cursor_line = current_line;
+    int old_cursor_pos = cursor_pos;
+
+    // Process each existing line
+    for (int i = 0; i <= current_line && new_line_count < MAX_LINES; i++) {
+        if (strlen(text_buffers[i]) == 0) {
+            if (new_line_count < MAX_LINES - 1) {
+                temp_buffers[new_line_count][0] = '\0';
+                temp_editable[new_line_count] = is_line_editable[i];
+                new_line_count++;
+            }
+            continue;
+        }
+
+        char *text = text_buffers[i];
+        int text_len = strlen(text);
+        int start = 0;
+
+        while (start < text_len && new_line_count < MAX_LINES) {
+            // Find how much text fits within max_text_width
+            int chars_to_render = text_len - start;
+            char temp[MAX_TEXT_LENGTH] = {0};
+            strncpy(temp, text + start, chars_to_render);
+            SDL_Surface *surface = TTF_RenderText_Solid(font, temp, strlen(temp), white);
+            if (surface) {
+                SDL_Texture *temp_texture = SDL_CreateTextureFromSurface(renderer, surface);
+                float text_width = 0;
+                if (temp_texture) {
+                    SDL_GetTextureSize(temp_texture, &text_width, NULL);
+                    SDL_DestroyTexture(temp_texture);
+                }
+                SDL_DestroySurface(surface);
+
+                // Binary search to find the max chars that fit
+                if (text_width > max_text_width) {
+                    int low = 0, high = chars_to_render;
+                    while (low < high) {
+                        int mid = (low + high + 1) / 2;
+                        strncpy(temp, text + start, mid);
+                        temp[mid] = '\0';
+                        surface = TTF_RenderText_Solid(font, temp, strlen(temp), white);
+                        if (surface) {
+                            temp_texture = SDL_CreateTextureFromSurface(renderer, surface);
+                            text_width = 0;
+                            if (temp_texture) {
+                                SDL_GetTextureSize(temp_texture, &text_width, NULL);
+                                SDL_DestroyTexture(temp_texture);
+                            }
+                            SDL_DestroySurface(surface);
+                            if (text_width <= max_text_width) {
+                                low = mid;
+                            } else {
+                                high = mid - 1;
+                            }
+                        } else {
+                            high = mid - 1;
+                        }
+                    }
+                    chars_to_render = low;
+                }
+            }
+
+            // Copy the fitting portion to the new buffer
+            if (chars_to_render > 0 && new_line_count < MAX_LINES) {
+                strncpy(temp_buffers[new_line_count], text + start, chars_to_render);
+                temp_buffers[new_line_count][chars_to_render] = '\0';
+                temp_editable[new_line_count] = is_line_editable[i];
+                // Create texture
+                surface = TTF_RenderText_Solid(font, temp_buffers[new_line_count], strlen(temp_buffers[new_line_count]), white);
+                if (surface) {
+                    temp_textures[new_line_count] = SDL_CreateTextureFromSurface(renderer, surface);
+                    SDL_DestroySurface(surface);
+                }
+                new_line_count++;
+            }
+            start += chars_to_render;
+        }
+    }
+
+    // Update global state
+    for (int i = 0; i < MAX_LINES; i++) {
+        if (textures[i]) {
+            SDL_DestroyTexture(textures[i]);
+            textures[i] = NULL;
+        }
+        text_buffers[i][0] = '\0';
+        is_line_editable[i] = false;
+    }
+    for (int i = 0; i < new_line_count; i++) {
+        strcpy(text_buffers[i], temp_buffers[i]);
+        textures[i] = temp_textures[i];
+        is_line_editable[i] = temp_editable[i];
+    }
+
+    // Adjust current_line and cursor_pos
+    current_line = new_line_count - 1;
+    if (current_line < 0) current_line = 0;
+    is_line_editable[current_line] = true;
+    cursor_pos = strlen(text_buffers[current_line]);
+
+    // Adjust scroll_offset
+    if (current_line >= scroll_offset + LINES_PER_SCREEN) {
+        scroll_offset = current_line - LINES_PER_SCREEN + 1;
+    }
+    if (scroll_offset < 0) scroll_offset = 0;
+}
 
 // Command implementations
 void cmd_clear(void) {
@@ -141,7 +255,7 @@ int main(int argc, char *argv[]) {
 
     // Create window and renderer
     printf("SDL_CreateWindowAndRenderer\n");
-    if (!SDL_CreateWindowAndRenderer("SDL3 Terminal Test", SCREEN_WIDTH, 600, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+    if (!SDL_CreateWindowAndRenderer("SDL3 Terminal Test", INITIAL_SCREEN_WIDTH, 600, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window/Renderer creation failed: %s", SDL_GetError());
         TTF_Quit();
         SDL_Quit();
@@ -216,6 +330,15 @@ int main(int argc, char *argv[]) {
                 case SDL_EVENT_QUIT:
                     is_running = false;
                     break;
+                case SDL_EVENT_WINDOW_RESIZED: {
+                    // Update max_text_width based on new window size
+                    int new_width;
+                    SDL_GetWindowSize(window, &new_width, NULL);
+                    max_text_width = new_width - TEXT_MARGIN;
+                    if (max_text_width < 10) max_text_width = 10; // Minimum width
+                    rewrap_text();
+                    break;
+                }
                 case SDL_EVENT_MOUSE_WHEEL: {
                     // Handle mouse wheel scrolling
                     int y = event.wheel.y;
@@ -252,7 +375,7 @@ int main(int argc, char *argv[]) {
                                 float text_width;
                                 SDL_GetTextureSize(temp_texture, &text_width, NULL);
                                 SDL_DestroyTexture(temp_texture);
-                                if (text_width > MAX_TEXT_WIDTH && current_line < MAX_LINES - 1) {
+                                if (text_width > max_text_width && current_line < MAX_LINES - 1) {
                                     // Wrap to next line
                                     current_line++;
                                     text_buffers[current_line][0] = '\0';
