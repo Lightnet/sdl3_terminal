@@ -2,43 +2,74 @@
 
 # License: MIT
 
-# Information:
-    Prototype terminal emulator place holder by using the SDL Render test. Just simple code test how terminal works.
+## Overview
+
+This is a prototype terminal emulator built using SDL3 and SDL3_ttf, designed as a simple test to explore terminal functionality. It renders text as textures within a resizable window, using the "Kenney Mini" font. The project serves as a working example of SDL3 and SDL3_ttf integration, with a focus on straightforward setup and cross-platform compatibility using CMake and MinGW-w64.
 
 ## Features
 
-- Renders text using the "Kenney Mini" font with SDL_ttf.
-- Creates a window with SDL3 to display top left text ("Hello, Terminal!").
-- Configured for static linking of SDL3, SDL_ttf, and FreeType to avoid DLL dependencies.
-- Built using CMake and MinGW-w64 for cross-platform compatibility.
-- it use render text as texture base on screen window size.
+- Text Rendering: Uses SDL3_ttf to render text with the "Kenney Mini" font (16pt) as textures, dynamically sized based on the window dimensions (default: 800x600 pixels).
+- Initial Display: Shows "Hello, Terminal!" in the top-left corner (10px margin) upon launch.
+- Input Handling:
+    - Case-sensitive character input.
+    - Cursor movement with the left arrow key for in-line editing.
+    - Backspace deletes the character before the cursor, moving to the previous line if at the start (except on the first line).
+    - Delete removes the character at the cursor position.
+    - Text wrapping at 790px (window width minus 10px margin) to the next line.
+- Multi-Line Support:
+    - Supports up to 100 lines (MAX_LINES) with automatic scrolling after 30 visible lines (LINES_PER_SCREEN).
+    - Lines are spaced 20 pixels apart vertically.
+- Command History:
+    - Stores up to 50 non-command inputs (MAX_HISTORY) for recall using up/down arrow keys.
+    - Commands (clear, exit, help) are not stored in history to keep it clean.
+- Blinking Cursor: A 16px vertical white cursor blinks every 500ms, positioned using SDL_GetTextureSize for accuracy.
+- Commands: Supports clear, exit, and help (with aliases -help, -h) via a command table for extensibility.
+- Build Configuration:
+    - Statically linked with SDL3, SDL3_ttf, and FreeType to eliminate DLL dependencies.
+    - Built with CMake and MinGW-w64 for Windows, with cross-platform compatibility.
+- Resizable Window: Adjusts rendering to window size, maintaining text layout.
 
-- case sensitive characters
-- scroll text when move
-- Command history with up/down arrow navigation (MAX_HISTORY=50).
-- Text wrapping (790px), backspace across lines, cursor movement (left arrow), delete, and Enter.
-- Multi-line text with scrolling (MAX_LINES=100, LINES_PER_SCREEN=30).
-- Blinking cursor using SDL_GetTextureSize.
+## Commands
 
-# simple terminal
-    Testing how it work some logic.
-## commands:
-```
-clear
-```
-Clear all lines.
-```
-exit
-```
-Close application.
+The terminal supports the following case-sensitive commands, entered by typing and pressing Enter:
 
-## Goals
+- clear
+    - Description: Clears all text in the terminal, resetting to a single empty line.
+    - History: Not stored in command history.
+- exit
+    - Description: Closes the application.
+    - History: Not stored in command history.
+- help, -help, -h
+    - Description: Displays a list of available commands ("Commands: clear, exit, help") on the next line, then moves to a new line for input.
+    - History: Not stored in command history.
 
-- Provide a working example of SDL2 and SDL_ttf integration.
-- terminal emulator.
-- Ensure a straightforward setup process for Windows developers using MSYS2.
+### Usage
+
+1. Run the Application:
+    - Launch the executable to open an 800x600 window titled "SDL3 Terminal Test".
+    - The initial text "Hello, Terminal!" appears on the first line.
+2. Interact:
+    - Type to input text at the blinking cursor.
+    - Use Left Arrow to move the cursor left within the current line.
+    - Press Backspace to delete the previous character or move to the previous line.
+    - Press Delete to remove the character at the cursor.
+    - Press Enter to submit the line:
+        - Commands (clear, exit, help) execute their actions.
+        - Non-command inputs are printed to the console and stored in history.
+    - Use Up Arrow to recall previous inputs (excluding commands).
+    - Use Down Arrow to move forward in history or clear the line at the end.
+    - Text wraps to the next line if it exceeds 790px.
+3. Close:
+    - Use the exit command or close the window.
+
 
 ## Requirements
+
+#### Prerequisites
+- CMake: Version 3.10 or higher.
+- MinGW-w64: For Windows builds (e.g., via MSYS2).
+- SDL3, SDL3_ttf, FreeType: Source or prebuilt libraries (statically linked).
+- Font: "Kenney Mini.ttf" in the executable’s directory (or update the path, e.g., C:/Windows/Fonts/arial.ttf).
 
 ### Software
 - Operating System: Windows 10 or later (64-bit).
