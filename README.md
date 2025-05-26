@@ -12,6 +12,18 @@
 - Configured for static linking of SDL3, SDL_ttf, and FreeType to avoid DLL dependencies.
 - Built using CMake and MinGW-w64 for cross-platform compatibility.
 
+# simple terminal
+    Testing how it work some logic.
+## commands:
+```
+clear
+```
+Clear all lines.
+```
+exit
+```
+Close application.
+
 ## Goals
 
 - Provide a working example of SDL2 and SDL_ttf integration.

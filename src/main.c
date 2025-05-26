@@ -5,7 +5,9 @@
 #include <string.h>
 
 #define MAX_TEXT_LENGTH 256
-#define MAX_LINES 10
+#define MAX_LINES 100 // Increased to allow more lines
+#define LINES_PER_SCREEN 30 // Approx. 600px height / 20px per line
+#define CURSOR_BLINK_MS 500
 
 /* We will use this renderer to draw into this window every frame. */
 static SDL_Window *window = NULL;
@@ -30,7 +32,7 @@ int main(int argc, char *argv[]) {
 
     // Create window and renderer
     printf("SDL_CreateWindowAndRenderer\n");
-    if (!SDL_CreateWindowAndRenderer("Font Test", 800, 600, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+    if (!SDL_CreateWindowAndRenderer("SDL3 Terminal Test", 800, 600, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window/Renderer creation failed: %s", SDL_GetError());
         TTF_Quit();
         SDL_Quit();
@@ -56,9 +58,12 @@ int main(int argc, char *argv[]) {
     char text_buffers[MAX_LINES][MAX_TEXT_LENGTH] = {{0}};
     strcpy(text_buffers[0], "Hello, Terminal!");
     int current_line = 0;
+    int scroll_offset = 0; // Start of visible lines
     SDL_Texture *textures[MAX_LINES] = {NULL};
     SDL_Color white = {255, 255, 255, 255};
     SDL_Color black = {0, 0, 0, 255};
+    bool cursor_visible = true;
+    Uint32 last_cursor_toggle = 0;
 
     // Initial text rendering for first line
     SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[0], strlen(text_buffers[0]), white);
@@ -115,48 +120,93 @@ int main(int argc, char *argv[]) {
                     break;
                 }
                 case SDL_EVENT_KEY_DOWN:
-                    if (event.key.key == SDLK_BACKSPACE && strlen(text_buffers[current_line]) > 0) {
-                        // Remove last character from current line
-                        text_buffers[current_line][strlen(text_buffers[current_line]) - 1] = '\0';
-                        // Update texture for current line
-                        if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
-                        surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
-                        if (!surface) {
-                            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
-                            running = false;
-                            break;
-                        }
-                        textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
-                        SDL_DestroySurface(surface);
-                        if (!textures[current_line]) {
-                            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture creation failed: %s", SDL_GetError());
-                            running = false;
+                    if (event.key.key == SDLK_BACKSPACE) {
+                        // Remove last character from current line if not empty
+                        if (strlen(text_buffers[current_line]) > 0) {
+                            text_buffers[current_line][strlen(text_buffers[current_line]) - 1] = '\0';
+                            // Update texture for current line
+                            if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
+                            if (strlen(text_buffers[current_line]) > 0) {
+                                surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+                                if (!surface) {
+                                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
+                                    running = false;
+                                    break;
+                                }
+                                textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
+                                SDL_DestroySurface(surface);
+                                if (!textures[current_line]) {
+                                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture creation failed: %s", SDL_GetError());
+                                    running = false;
+                                    break;
+                                }
+                            } else {
+                                textures[current_line] = NULL; // Empty line, no texture
+                            }
                         }
                     } else if (event.key.key == SDLK_RETURN && current_line < MAX_LINES - 1) {
-                        // Parse current line (print to console)
-                        if (strlen(text_buffers[current_line]) > 0) {
-                            printf("Parsed input: %s\n", text_buffers[current_line]);
+                        // Check for commands
+                        if (strcmp(text_buffers[current_line], "clear") == 0) {
+                            // Clear all lines and reset
+                            for (int i = 0; i < MAX_LINES; i++) {
+                                text_buffers[i][0] = '\0';
+                                if (textures[i]) {
+                                    SDL_DestroyTexture(textures[i]);
+                                    textures[i] = NULL;
+                                }
+                            }
+                            current_line = 0;
+                            scroll_offset = 0;
+                        } else if (strcmp(text_buffers[current_line], "exit") == 0) {
+                            running = false;
+                        } else {
+                            // Parse current line (print to console)
+                            if (strlen(text_buffers[current_line]) > 0) {
+                                printf("Parsed input: %s\n", text_buffers[current_line]);
+                            }
+                            // Move to next line
+                            current_line++;
+                            text_buffers[current_line][0] = '\0'; // Clear new line
+                            if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
+                            textures[current_line] = NULL; // Ensure texture is null for empty line
+                            // Adjust scroll offset if needed
+                            if (current_line >= scroll_offset + LINES_PER_SCREEN) {
+                                scroll_offset++;
+                            }
                         }
-                        // Move to next line
-                        current_line++;
-                        text_buffers[current_line][0] = '\0'; // Clear new line
-                        if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
-                        textures[current_line] = NULL; // Ensure texture is null for empty line
                     }
                     break;
             }
         }
 
+        // Update cursor blink
+        Uint32 current_time = SDL_GetTicks();
+        if (current_time - last_cursor_toggle >= CURSOR_BLINK_MS) {
+            cursor_visible = !cursor_visible;
+            last_cursor_toggle = current_time;
+        }
+
         // Render
         SDL_SetRenderDrawColor(renderer, black.r, black.g, black.b, black.a);
         SDL_RenderClear(renderer);
-        // Render all lines
-        for (int i = 0; i <= current_line; i++) {
+        // Render visible lines
+        for (int i = scroll_offset; i <= current_line && i < scroll_offset + LINES_PER_SCREEN; i++) {
             if (textures[i]) {
-                SDL_FRect dest = {10.0f, 10.0f + i * 20.0f, 0.0f, 0.0f}; // 20px vertical spacing
+                SDL_FRect dest = {10.0f, 10.0f + (i - scroll_offset) * 20.0f, 0.0f, 0.0f}; // 20px vertical spacing
                 SDL_GetTextureSize(textures[i], &dest.w, &dest.h);
                 SDL_RenderTexture(renderer, textures[i], NULL, &dest);
             }
+        }
+        // Render blinking cursor on current line
+        if (cursor_visible) {
+            float text_width = 0.0f;
+            if (textures[current_line]) {
+                SDL_GetTextureSize(textures[current_line], &text_width, NULL);
+            }
+            float cursor_x = 10.0f + text_width;
+            float cursor_y = 10.0f + (current_line - scroll_offset) * 20.0f;
+            SDL_SetRenderDrawColor(renderer, white.r, white.g, white.b, white.a);
+            SDL_RenderLine(renderer, cursor_x, cursor_y, cursor_x, cursor_y + 16.0f); // 16px cursor height
         }
         SDL_RenderPresent(renderer);
     }
