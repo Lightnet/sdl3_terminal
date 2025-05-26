@@ -17,6 +17,12 @@
 - [Setup Instructions](#setup-instructions)
 - [Credits](#credits)
 
+# OS:
+- [x] Windows > CMake > MinGW > msys2
+- [x] Windows > wsl > Debian > CMake
+
+Tested the compiler note it need tools and library packages to run as well SDL helpers from tools and packages as well.
+
 ## Overview
 
 This is a prototype terminal emulator built using SDL3 and SDL3_ttf, designed as a simple test to explore terminal functionality. It renders text as textures within a resizable window, using the "Kenney Pixel" font. The project serves as a working example of SDL3 and SDL3_ttf integration, with a focus on straightforward setup and cross-platform compatibility using CMake and MinGW-w64.
