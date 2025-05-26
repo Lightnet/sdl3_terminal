@@ -44,6 +44,7 @@ static const int num_commands = sizeof(commands) / sizeof(commands[0]);
 // Global state for commands
 static char text_buffers[MAX_LINES][MAX_TEXT_LENGTH] = {{0}};
 static SDL_Texture *textures[MAX_LINES] = {NULL};
+static bool is_line_editable[MAX_LINES] = {false}; // Track editable lines
 static int current_line = 0;
 static int scroll_offset = 0;
 static int cursor_pos = 0;
@@ -61,11 +62,13 @@ void cmd_clear(void) {
             SDL_DestroyTexture(textures[i]);
             textures[i] = NULL;
         }
+        is_line_editable[i] = false;
     }
     current_line = 0;
     scroll_offset = 0;
     cursor_pos = 0;
     history_pos = -1;
+    is_line_editable[0] = true; // New input line is editable
 }
 
 void cmd_exit(void) {
@@ -74,30 +77,43 @@ void cmd_exit(void) {
 
 void cmd_help(void) {
     if (current_line < MAX_LINES - 1) {
-        // Move to next line and print help
+        // Move to next line for help output
         current_line++;
+        // Build help text
         char help_text[MAX_TEXT_LENGTH] = "Commands: ";
+        int first = 1;
         for (int i = 0; i < num_commands; i++) {
-            if (commands[i].description) { // Only show commands with descriptions
-                if (i > 0 && commands[i-1].description) {
+            if (commands[i].description) { // Only include commands with descriptions
+                if (!first) {
                     strcat(help_text, ", ");
                 }
                 strcat(help_text, commands[i].name);
+                first = 0;
             }
         }
+        // Copy to buffer
         strcpy(text_buffers[current_line], help_text);
+        is_line_editable[current_line] = false; // Help output is not editable
+        // Update texture
         if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
         SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
-        if (surface) {
-            textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
-            SDL_DestroySurface(surface);
+        if (!surface) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Help text rendering failed: %s", SDL_GetError());
+            return;
         }
-        // Move to next line for input
+        textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_DestroySurface(surface);
+        if (!textures[current_line]) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Help texture creation failed: %s", SDL_GetError());
+            return;
+        }
+        // Prepare next line for input
         if (current_line < MAX_LINES - 1) {
             current_line++;
             text_buffers[current_line][0] = '\0';
             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
             textures[current_line] = NULL;
+            is_line_editable[current_line] = true; // Input line is editable
             cursor_pos = 0;
             if (current_line >= scroll_offset + LINES_PER_SCREEN) {
                 scroll_offset++;
@@ -147,37 +163,46 @@ int main(int argc, char *argv[]) {
     // Enable text input
     SDL_StartTextInput(window);
 
-    // Initialize text buffer
-    strcpy(text_buffers[0], "Hello, Terminal!");
-    current_line = 0;
+    // Initialize text buffer with welcome message
+    strcpy(text_buffers[0], "SDL3 terminal. License: MIT");
+    strcpy(text_buffers[1], "Simple test terminal emulator.");
+    is_line_editable[0] = false; // Welcome message not editable
+    is_line_editable[1] = false; // Welcome message not editable
+    current_line = 2;
     scroll_offset = 0;
-    cursor_pos = strlen(text_buffers[0]);
+    cursor_pos = 0;
+    is_line_editable[2] = true; // Input line is editable
     SDL_Color black = {0, 0, 0, 255};
     bool cursor_visible = true;
     Uint32 last_cursor_toggle = 0;
 
-    // Initial text rendering for first line
-    SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[0], strlen(text_buffers[0]), white);
-    if (!surface) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
-        TTF_CloseFont(font);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        TTF_Quit();
-        SDL_Quit();
-        return 1;
+    // Initial text rendering for welcome message
+    for (int i = 0; i < 2; i++) {
+        SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[i], strlen(text_buffers[i]), white);
+        if (!surface) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
+            TTF_CloseFont(font);
+            SDL_DestroyRenderer(renderer);
+            SDL_DestroyWindow(window);
+            TTF_Quit();
+            SDL_Quit();
+            return 1;
+        }
+        textures[i] = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_DestroySurface(surface);
+        if (!textures[i]) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture creation failed: %s", SDL_GetError());
+            TTF_CloseFont(font);
+            SDL_DestroyRenderer(renderer);
+            SDL_DestroyWindow(window);
+            TTF_Quit();
+            SDL_Quit();
+            return 1;
+        }
     }
-    textures[0] = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_DestroySurface(surface);
-    if (!textures[0]) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture creation failed: %s", SDL_GetError());
-        TTF_CloseFont(font);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        TTF_Quit();
-        SDL_Quit();
-        return 1;
-    }
+    // Initialize input line
+    text_buffers[2][0] = '\0';
+    textures[2] = NULL;
 
     // Set running pointer for commands
     bool is_running = true;
@@ -211,14 +236,14 @@ int main(int argc, char *argv[]) {
                     // Check if adding text exceeds screen width
                     size_t current_len = strlen(text_buffers[current_line]);
                     size_t input_len = strlen(event.text.text);
-                    if (current_len + input_len < MAX_TEXT_LENGTH - 1) {
+                    if (current_len + input_len < MAX_TEXT_LENGTH - 1 && is_line_editable[current_line]) {
                         // Create temporary buffer with new text inserted
                         char temp[MAX_TEXT_LENGTH] = {0};
                         strncpy(temp, text_buffers[current_line], cursor_pos);
                         strcat(temp, event.text.text);
                         strcat(temp, &text_buffers[current_line][cursor_pos]);
                         // Measure width
-                        surface = TTF_RenderText_Solid(font, temp, strlen(temp), white);
+                        SDL_Surface *surface = TTF_RenderText_Solid(font, temp, strlen(temp), white);
                         bool wrap = false;
                         if (surface) {
                             SDL_Texture *temp_texture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -234,6 +259,7 @@ int main(int argc, char *argv[]) {
                                     cursor_pos = 0;
                                     if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                                     textures[current_line] = NULL;
+                                    is_line_editable[current_line] = true;
                                     if (current_line >= scroll_offset + LINES_PER_SCREEN) {
                                         scroll_offset++;
                                     }
@@ -256,7 +282,7 @@ int main(int argc, char *argv[]) {
                         // Update texture for current line
                         if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                         if (strlen(text_buffers[current_line]) > 0) {
-                            surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+                            SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
                             if (!surface) {
                                 SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
                                 is_running = false;
@@ -276,7 +302,7 @@ int main(int argc, char *argv[]) {
                 }
                 case SDL_EVENT_KEY_DOWN:
                     if (event.key.key == SDLK_BACKSPACE) {
-                        if (cursor_pos > 0) {
+                        if (cursor_pos > 0 && is_line_editable[current_line]) {
                             // Remove character before cursor
                             memmove(&text_buffers[current_line][cursor_pos - 1],
                                     &text_buffers[current_line][cursor_pos],
@@ -286,7 +312,7 @@ int main(int argc, char *argv[]) {
                             // Update texture
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             if (strlen(text_buffers[current_line]) > 0) {
-                                surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+                                SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
                                 if (!surface) {
                                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
                                     is_running = false;
@@ -302,46 +328,11 @@ int main(int argc, char *argv[]) {
                             } else {
                                 textures[current_line] = NULL;
                             }
-                        } else if (current_line > 0) {
-                            // Move to end of previous line
-                            current_line--;
-                            cursor_pos = strlen(text_buffers[current_line]);
-                            if (cursor_pos > 0) {
-                                text_buffers[current_line][cursor_pos - 1] = '\0';
-                                // Update texture
-                                if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
-                                if (strlen(text_buffers[current_line]) > 0) {
-                                    surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
-                                    if (!surface) {
-                                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
-                                        is_running = false;
-                                        break;
-                                    }
-                                    textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
-                                    SDL_DestroySurface(surface);
-                                    if (!textures[current_line]) {
-                                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture creation failed: %s", SDL_GetError());
-                                        is_running = false;
-                                    }
-                                } else {
-                                    textures[current_line] = NULL;
-                                }
-                            }
-                            // Clear next line
-                            text_buffers[current_line + 1][0] = '\0';
-                            if (textures[current_line + 1]) {
-                                SDL_DestroyTexture(textures[current_line + 1]);
-                                textures[current_line + 1] = NULL;
-                            }
-                            history_pos = -1;
-                            // Adjust scroll offset if needed
-                            if (current_line < scroll_offset) {
-                                scroll_offset--;
-                            }
                         }
+                        // Prevent moving to previous line if it's not editable
                     } else if (event.key.key == SDLK_DELETE) {
                         // Remove character at cursor if not at end
-                        if (cursor_pos < (int)strlen(text_buffers[current_line])) {
+                        if (cursor_pos < (int)strlen(text_buffers[current_line]) && is_line_editable[current_line]) {
                             memmove(&text_buffers[current_line][cursor_pos],
                                     &text_buffers[current_line][cursor_pos + 1],
                                     strlen(text_buffers[current_line]) - cursor_pos);
@@ -349,7 +340,7 @@ int main(int argc, char *argv[]) {
                             // Update texture
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             if (strlen(text_buffers[current_line]) > 0) {
-                                surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+                                SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
                                 if (!surface) {
                                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
                                     is_running = false;
@@ -374,14 +365,14 @@ int main(int argc, char *argv[]) {
                         }
                     } else if (event.key.key == SDLK_UP) {
                         // Recall previous command
-                        if (history_count > 0 && history_pos < history_count - 1) {
+                        if (history_count > 0 && history_pos < history_count - 1 && is_line_editable[current_line]) {
                             history_pos++;
                             strcpy(text_buffers[current_line], command_history[history_count - 1 - history_pos]);
                             cursor_pos = strlen(text_buffers[current_line]);
                             // Update texture
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             if (strlen(text_buffers[current_line]) > 0) {
-                                surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+                                SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
                                 if (!surface) {
                                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
                                     is_running = false;
@@ -400,7 +391,7 @@ int main(int argc, char *argv[]) {
                         }
                     } else if (event.key.key == SDLK_DOWN) {
                         // Recall next command or clear input
-                        if (history_pos >= 0) {
+                        if (history_pos >= 0 && is_line_editable[current_line]) {
                             history_pos--;
                             if (history_pos >= 0) {
                                 strcpy(text_buffers[current_line], command_history[history_count - 1 - history_pos]);
@@ -411,7 +402,7 @@ int main(int argc, char *argv[]) {
                             // Update texture
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             if (strlen(text_buffers[current_line]) > 0) {
-                                surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+                                SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
                                 if (!surface) {
                                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
                                     is_running = false;
@@ -461,6 +452,7 @@ int main(int argc, char *argv[]) {
                             text_buffers[current_line][0] = '\0';
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             textures[current_line] = NULL;
+                            is_line_editable[current_line] = true;
                             cursor_pos = 0;
                             history_pos = -1;
                             // Adjust scroll offset if needed
@@ -469,14 +461,20 @@ int main(int argc, char *argv[]) {
                             }
                         } else if (is_command && !is_clear) {
                             // Move to next line after command, except for clear
-                            current_line++;
-                            text_buffers[current_line][0] = '\0';
-                            if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
-                            textures[current_line] = NULL;
-                            cursor_pos = 0;
-                            history_pos = -1;
-                            if (current_line >= scroll_offset + LINES_PER_SCREEN) {
-                                scroll_offset++;
+                            // (handled in cmd_help for help command)
+                            if (strcmp(text_buffers[current_line], "help") != 0 &&
+                                strcmp(text_buffers[current_line], "-help") != 0 &&
+                                strcmp(text_buffers[current_line], "-h") != 0) {
+                                current_line++;
+                                text_buffers[current_line][0] = '\0';
+                                if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
+                                textures[current_line] = NULL;
+                                is_line_editable[current_line] = true;
+                                cursor_pos = 0;
+                                history_pos = -1;
+                                if (current_line >= scroll_offset + LINES_PER_SCREEN) {
+                                    scroll_offset++;
+                                }
                             }
                         }
                         // If clear was executed, no need to move to next line (handled in cmd_clear)
@@ -510,7 +508,7 @@ int main(int argc, char *argv[]) {
                 // Create temporary string up to cursor_pos
                 char temp[MAX_TEXT_LENGTH] = {0};
                 strncpy(temp, text_buffers[current_line], cursor_pos);
-                surface = TTF_RenderText_Solid(font, temp, strlen(temp), white);
+                SDL_Surface *surface = TTF_RenderText_Solid(font, temp, strlen(temp), white);
                 if (surface) {
                     SDL_Texture *temp_texture = SDL_CreateTextureFromSurface(renderer, surface);
                     SDL_DestroySurface(surface);
