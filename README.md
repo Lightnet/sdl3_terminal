@@ -2,6 +2,21 @@
 
 # License: MIT
 
+## Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [Commands](#commands)
+- [Usage](#usage)
+- [Visual Diagram: Input and Rendering Flow](#visual-diagram-inputand-rendering-flow)
+- [Explanation](#explanation)
+- [Requirements](#requirements)
+- [Prerequisites](#prerequisites)
+- [Software](#software)
+- [Dependencies](#dependencies)
+- [MSYS2 Packages](#msys2-packages)
+- [Setup Instructions](#setup-instructions)
+- [Credits](#credits)
+
 ## Overview
 
 This is a prototype terminal emulator built using SDL3 and SDL3_ttf, designed as a simple test to explore terminal functionality. It renders text as textures within a resizable window, using the "Kenney Pixel" font. The project serves as a working example of SDL3 and SDL3_ttf integration, with a focus on straightforward setup and cross-platform compatibility using CMake and MinGW-w64.
