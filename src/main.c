@@ -49,6 +49,9 @@ static int scroll_offset = 0;
 static int cursor_pos = 0;
 static bool *running = NULL; // Set in main
 static SDL_Color white = {255, 255, 255, 255};
+static char *command_history[MAX_HISTORY] = {NULL};
+static int history_count = 0;
+static int history_pos = -1;
 
 // Command implementations
 void cmd_clear(void) {
@@ -62,6 +65,7 @@ void cmd_clear(void) {
     current_line = 0;
     scroll_offset = 0;
     cursor_pos = 0;
+    history_pos = -1;
 }
 
 void cmd_exit(void) {
@@ -130,7 +134,7 @@ int main(int argc, char *argv[]) {
 
     // Load font
     printf("TTF_OpenFont\n");
-    font = TTF_OpenFont("Kenney Mini.ttf", 16);
+    font = TTF_OpenFont("Kenney Pixel.ttf", 16);
     if (!font) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Font loading failed: %s", SDL_GetError());
         SDL_DestroyRenderer(renderer);
@@ -151,11 +155,6 @@ int main(int argc, char *argv[]) {
     SDL_Color black = {0, 0, 0, 255};
     bool cursor_visible = true;
     Uint32 last_cursor_toggle = 0;
-
-    // Command history
-    char *command_history[MAX_HISTORY] = {NULL};
-    int history_count = 0;
-    int history_pos = -1;
 
     // Initial text rendering for first line
     SDL_Surface *surface = TTF_RenderText_Solid(font, text_buffers[0], strlen(text_buffers[0]), white);
@@ -192,6 +191,22 @@ int main(int argc, char *argv[]) {
                 case SDL_EVENT_QUIT:
                     is_running = false;
                     break;
+                case SDL_EVENT_MOUSE_WHEEL: {
+                    // Handle mouse wheel scrolling
+                    int y = event.wheel.y;
+                    if (y > 0) { // Scroll up
+                        if (scroll_offset > 0) {
+                            scroll_offset--;
+                        }
+                    } else if (y < 0) { // Scroll down
+                        int max_offset = current_line - LINES_PER_SCREEN + 1;
+                        if (max_offset < 0) max_offset = 0;
+                        if (scroll_offset < max_offset) {
+                            scroll_offset++;
+                        }
+                    }
+                    break;
+                }
                 case SDL_EVENT_TEXT_INPUT: {
                     // Check if adding text exceeds screen width
                     size_t current_len = strlen(text_buffers[current_line]);
@@ -312,10 +327,12 @@ int main(int argc, char *argv[]) {
                                     textures[current_line] = NULL;
                                 }
                             }
-                            // Clear current line
+                            // Clear next line
                             text_buffers[current_line + 1][0] = '\0';
-                            if (textures[current_line + 1]) SDL_DestroyTexture(textures[current_line + 1]);
-                            textures[current_line + 1] = NULL;
+                            if (textures[current_line + 1]) {
+                                SDL_DestroyTexture(textures[current_line + 1]);
+                                textures[current_line + 1] = NULL;
+                            }
                             history_pos = -1;
                             // Adjust scroll offset if needed
                             if (current_line < scroll_offset) {
@@ -414,8 +431,12 @@ int main(int argc, char *argv[]) {
                     } else if (event.key.key == SDLK_RETURN && current_line < MAX_LINES - 1) {
                         // Check for commands
                         bool is_command = false;
+                        bool is_clear = false;
                         for (int i = 0; i < num_commands; i++) {
                             if (strcmp(text_buffers[current_line], commands[i].name) == 0) {
+                                if (strcmp(commands[i].name, "clear") == 0) {
+                                    is_clear = true;
+                                }
                                 commands[i].function();
                                 is_command = true;
                                 break;
@@ -446,8 +467,8 @@ int main(int argc, char *argv[]) {
                             if (current_line >= scroll_offset + LINES_PER_SCREEN) {
                                 scroll_offset++;
                             }
-                        } else if (is_command) {
-                            // Move to next line after command
+                        } else if (is_command && !is_clear) {
+                            // Move to next line after command, except for clear
                             current_line++;
                             text_buffers[current_line][0] = '\0';
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
@@ -458,8 +479,9 @@ int main(int argc, char *argv[]) {
                                 scroll_offset++;
                             }
                         }
+                        // If clear was executed, no need to move to next line (handled in cmd_clear)
+                        break;
                     }
-                    break;
             }
         }
 
