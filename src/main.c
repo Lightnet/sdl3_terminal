@@ -254,14 +254,16 @@ int main(int argc, char *argv[]) {
     printf("SDL3 freetype\n");
 
     // Initialize SDL
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    // https://wiki.libsdl.org/SDL3/SDL_Init
+    if (!SDL_Init(SDL_INIT_VIDEO)) { // SDL 3.x format, default bool
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
         return 1;
     }
 
     // Initialize SDL_ttf
     printf("TTF_Init\n");
-    if (!TTF_Init()) {
+    // https://wiki.libsdl.org/SDL3_ttf/TTF_Init
+    if (!TTF_Init()) { // SDL 3.x format, return default bool
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "TTF_Init failed: %s", SDL_GetError());
         SDL_Quit();
         return 1;
@@ -269,6 +271,8 @@ int main(int argc, char *argv[]) {
 
     // Create window and renderer
     printf("SDL_CreateWindowAndRenderer\n");
+    // https://wiki.libsdl.org/SDL3/SDL_CreateWindowAndRenderer
+    //  SDL 3.x format, return default bool
     if (!SDL_CreateWindowAndRenderer("SDL3 Terminal Test", INITIAL_SCREEN_WIDTH, 600, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window/Renderer creation failed: %s", SDL_GetError());
         TTF_Quit();

@@ -4,12 +4,14 @@
 
 ## Overview
 
-This is a prototype terminal emulator built using SDL3 and SDL3_ttf, designed as a simple test to explore terminal functionality. It renders text as textures within a resizable window, using the "Kenney Mini" font. The project serves as a working example of SDL3 and SDL3_ttf integration, with a focus on straightforward setup and cross-platform compatibility using CMake and MinGW-w64.
+This is a prototype terminal emulator built using SDL3 and SDL3_ttf, designed as a simple test to explore terminal functionality. It renders text as textures within a resizable window, using the "Kenney Pixel" font. The project serves as a working example of SDL3 and SDL3_ttf integration, with a focus on straightforward setup and cross-platform compatibility using CMake and MinGW-w64.
+
+It has no functions for terminal. It simple commands input test to see how it works for SDL3 Render Text.
 
 ## Features
 
-- Text Rendering: Uses SDL3_ttf to render text with the "Kenney Mini" font (16pt) as textures, dynamically sized based on the window dimensions (default: 800x600 pixels).
-- Initial Display: Shows "Hello, Terminal!" in the top-left corner (10px margin) upon launch.
+- Text Rendering: Uses SDL3_ttf to render text with the "Kenney Pixel" font (16pt) as textures, dynamically sized based on the window dimensions (default: 800x600 pixels).
+- Initial Display: Shows welcome message in the top-left corner (10px margin) upon launch.
 - Input Handling:
     - Case-sensitive character input.
     - Cursor movement with the left arrow key for in-line editing.
@@ -31,7 +33,6 @@ This is a prototype terminal emulator built using SDL3 and SDL3_ttf, designed as
 - Mouse Scroll texts
 - Resize Window to readjust text lines.
 
-
 ## Commands
 
 The terminal supports the following case-sensitive commands, entered by typing and pressing Enter:
@@ -51,7 +52,7 @@ The terminal supports the following case-sensitive commands, entered by typing a
 
 1. Run the Application:
     - Launch the executable to open an 800x600 window titled "SDL3 Terminal Test".
-    - The initial text "Hello, Terminal!" appears on the first line.
+    - The initial text welcome message appears on the first two line.
 2. Interact:
     - Type to input text at the blinking cursor.
     - Use Left Arrow to move the cursor left within the current line.
