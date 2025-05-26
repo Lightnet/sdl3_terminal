@@ -7,7 +7,7 @@
 - [Features](#features)
 - [Commands](#commands)
 - [Usage](#usage)
-- [Visual Diagram: Input and Rendering Flow](#visual-diagram-inputand-rendering-flow)
+- [Visual Diagram: Input and Rendering Flow](#visual-diagram-input-and-rendering-flow)
 - [Explanation](#explanation)
 - [Requirements](#requirements)
 - [Prerequisites](#prerequisites)
