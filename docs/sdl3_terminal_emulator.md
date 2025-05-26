@@ -4,14 +4,14 @@ This document provides a comprehensive guide to the SDL3 terminal emulator imple
 
 ## Table of Contents
 
-1. Overview (#overview)
-2. How It Works (#how-it-works)
-3. Using the Terminal (#using-the-terminal)
-4. Adding New Commands (#adding-new-commands)
-5. Visual Diagram: Input and Rendering Flow (#visual-diagram-input-and-rendering-flow)
-6. Internal Details (#internal-details)
-7. Compilation and Dependencies (#compilation-and-dependencies)
-8. Troubleshooting (#troubleshooting)
+1. [Overview](#overview)
+2. [How It Works](#how-it-works)
+3. [Using the Terminal](#using-the-terminal)
+4. [Adding New Commands](#adding-new-commands)
+5. [Visual Diagram: Input and Rendering Flow](#visual-diagram-input-and-rendering-flow)
+6. [Internal Details](#internal-details)
+7. [Compilation and Dependencies](#compilation-and-dependencies)
+8. [Troubleshooting](#troubleshooting)
     
 
 ## Overview
