@@ -59,6 +59,7 @@ int main(int argc, char *argv[]) {
     strcpy(text_buffers[0], "Hello, Terminal!");
     int current_line = 0;
     int scroll_offset = 0; // Start of visible lines
+    int cursor_pos = strlen(text_buffers[0]); // Cursor position in current line
     SDL_Texture *textures[MAX_LINES] = {NULL};
     SDL_Color white = {255, 255, 255, 255};
     SDL_Color black = {0, 0, 0, 255};
@@ -98,10 +99,17 @@ int main(int argc, char *argv[]) {
                     running = false;
                     break;
                 case SDL_EVENT_TEXT_INPUT: {
-                    // Append input text to current line's buffer
+                    // Insert input text at cursor position
                     size_t current_len = strlen(text_buffers[current_line]);
-                    if (current_len + strlen(event.text.text) < MAX_TEXT_LENGTH - 1) {
-                        strcat(text_buffers[current_line], event.text.text);
+                    size_t input_len = strlen(event.text.text);
+                    if (current_len + input_len < MAX_TEXT_LENGTH - 1) {
+                        // Shift characters right to make space
+                        memmove(&text_buffers[current_line][cursor_pos + input_len],
+                                &text_buffers[current_line][cursor_pos],
+                                current_len - cursor_pos + 1); // +1 for null terminator
+                        // Insert new text
+                        memcpy(&text_buffers[current_line][cursor_pos], event.text.text, input_len);
+                        cursor_pos += input_len;
                         // Update texture for current line
                         if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                         surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
@@ -121,9 +129,12 @@ int main(int argc, char *argv[]) {
                 }
                 case SDL_EVENT_KEY_DOWN:
                     if (event.key.key == SDLK_BACKSPACE) {
-                        // Remove last character from current line if not empty
-                        if (strlen(text_buffers[current_line]) > 0) {
-                            text_buffers[current_line][strlen(text_buffers[current_line]) - 1] = '\0';
+                        // Remove character before cursor if not at start
+                        if (cursor_pos > 0) {
+                            memmove(&text_buffers[current_line][cursor_pos - 1],
+                                    &text_buffers[current_line][cursor_pos],
+                                    strlen(text_buffers[current_line]) - cursor_pos + 1);
+                            cursor_pos--;
                             // Update texture for current line
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             if (strlen(text_buffers[current_line]) > 0) {
@@ -144,6 +155,37 @@ int main(int argc, char *argv[]) {
                                 textures[current_line] = NULL; // Empty line, no texture
                             }
                         }
+                    } else if (event.key.key == SDLK_DELETE) {
+                        // Remove character at cursor if not at end
+                        if (cursor_pos < (int)strlen(text_buffers[current_line])) {
+                            memmove(&text_buffers[current_line][cursor_pos],
+                                    &text_buffers[current_line][cursor_pos + 1],
+                                    strlen(text_buffers[current_line]) - cursor_pos);
+                            // Update texture for current line
+                            if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
+                            if (strlen(text_buffers[current_line]) > 0) {
+                                surface = TTF_RenderText_Solid(font, text_buffers[current_line], strlen(text_buffers[current_line]), white);
+                                if (!surface) {
+                                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Text rendering failed: %s", SDL_GetError());
+                                    running = false;
+                                    break;
+                                }
+                                textures[current_line] = SDL_CreateTextureFromSurface(renderer, surface);
+                                SDL_DestroySurface(surface);
+                                if (!textures[current_line]) {
+                                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture creation failed: %s", SDL_GetError());
+                                    running = false;
+                                    break;
+                                }
+                            } else {
+                                textures[current_line] = NULL; // Empty line, no texture
+                            }
+                        }
+                    } else if (event.key.key == SDLK_LEFT) {
+                        // Move cursor left
+                        if (cursor_pos > 0) {
+                            cursor_pos--;
+                        }
                     } else if (event.key.key == SDLK_RETURN && current_line < MAX_LINES - 1) {
                         // Check for commands
                         if (strcmp(text_buffers[current_line], "clear") == 0) {
@@ -157,6 +199,7 @@ int main(int argc, char *argv[]) {
                             }
                             current_line = 0;
                             scroll_offset = 0;
+                            cursor_pos = 0;
                         } else if (strcmp(text_buffers[current_line], "exit") == 0) {
                             running = false;
                         } else {
@@ -169,6 +212,7 @@ int main(int argc, char *argv[]) {
                             text_buffers[current_line][0] = '\0'; // Clear new line
                             if (textures[current_line]) SDL_DestroyTexture(textures[current_line]);
                             textures[current_line] = NULL; // Ensure texture is null for empty line
+                            cursor_pos = 0; // Reset cursor for new line
                             // Adjust scroll offset if needed
                             if (current_line >= scroll_offset + LINES_PER_SCREEN) {
                                 scroll_offset++;
@@ -200,8 +244,19 @@ int main(int argc, char *argv[]) {
         // Render blinking cursor on current line
         if (cursor_visible) {
             float text_width = 0.0f;
-            if (textures[current_line]) {
-                SDL_GetTextureSize(textures[current_line], &text_width, NULL);
+            if (textures[current_line] && cursor_pos > 0) {
+                // Create temporary string up to cursor_pos
+                char temp[MAX_TEXT_LENGTH] = {0};
+                strncpy(temp, text_buffers[current_line], cursor_pos);
+                surface = TTF_RenderText_Solid(font, temp, strlen(temp), white);
+                if (surface) {
+                    SDL_Texture *temp_texture = SDL_CreateTextureFromSurface(renderer, surface);
+                    SDL_DestroySurface(surface);
+                    if (temp_texture) {
+                        SDL_GetTextureSize(temp_texture, &text_width, NULL);
+                        SDL_DestroyTexture(temp_texture);
+                    }
+                }
             }
             float cursor_x = 10.0f + text_width;
             float cursor_y = 10.0f + (current_line - scroll_offset) * 20.0f;
