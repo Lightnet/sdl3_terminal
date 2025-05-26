@@ -11,6 +11,14 @@
 - Creates a window with SDL3 to display top left text ("Hello, Terminal!").
 - Configured for static linking of SDL3, SDL_ttf, and FreeType to avoid DLL dependencies.
 - Built using CMake and MinGW-w64 for cross-platform compatibility.
+- it use render text as texture base on screen window size.
+
+- case sensitive characters
+- scroll text when move
+- Command history with up/down arrow navigation (MAX_HISTORY=50).
+- Text wrapping (790px), backspace across lines, cursor movement (left arrow), delete, and Enter.
+- Multi-line text with scrolling (MAX_LINES=100, LINES_PER_SCREEN=30).
+- Blinking cursor using SDL_GetTextureSize.
 
 # simple terminal
     Testing how it work some logic.
@@ -27,7 +35,7 @@ Close application.
 ## Goals
 
 - Provide a working example of SDL2 and SDL_ttf integration.
-- Serve as a starting point for more complex projects, such as a terminal emulator.
+- terminal emulator.
 - Ensure a straightforward setup process for Windows developers using MSYS2.
 
 ## Requirements
